@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; background: #222; display: flex; flex-direction: column; align-items: center; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; touch-action: none; }
+        canvas { background: #333; border: 4px solid #444; cursor: pointer; }
+        .hud { position: absolute; top: 20px; font-size: 2rem; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px black; }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        button { padding: 15px 30px; font-size: 1.5rem; cursor: pointer; background: #3498db; border: none; color: white; border-radius: 50px; transition: 0.2s; }
+        button:hover {font-weight: 700; background: #2980b9; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+    <div class="hud">DISTANCE: <span id="score">0</span>m</div>
+    <div id="overlay">
+        <h1 style="font-size: 3rem; color: #e74c3c; font-weight: 800">CRASHED!</h1>
+        <p style="font-size: 1.5rem;">You traveled: <span id="finalScore">0</span>m</p>
+        <button onclick="resetGame()">PLAY AGAIN</button>
+    </div>
+    <canvas id="gameCanvas" width="400" height="750"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const overlay = document.getElementById("overlay");
+const finalScoreEl = document.getElementById("finalScore");
+
+let gameActive = true;
+let score = 0;
+let obstacles = [];
+let roadOffset = 0;
+
+const car = {
+    x: 225,
+    y: 550,
+    width: 34,
+    height: 60,
+    forwardSpeed: 6,
+    sideSpeed: 5,
+    direction: 1,
+};
+
+function resizeWindow() {
+    canvas.width  = window.innerWidth / 4;
+    canvas.height = window.innerHeight;
+}
+
+resizeWindow()
+
+window.addEventListener("pointerdown", () => {
+    if (gameActive) car.direction *= -1;
+});
+
+window.addEventListener('keydown', () => {
+    if (event.code === "Space") {
+        if (gameActive) car.direction *= -1;
+    }
+});
+
+function spawnObstacle() {
+    // Difficulty increases with score
+    const spawnRate = 0.02 + (score / 100000);
+    if (Math.random() < spawnRate) {
+        obstacles.push({
+            x: Math.random() * (canvas.width - 60) + 30,
+            y: -100,
+            size: 30,
+            type: Math.random() > 0.5 ? 'parked car' : 'traffic cone',
+            color: Math.random() > 0.5 ? "#FF0000" : "#ffA500"
+        });
+    }
+}
+
+function update() {
+    if(!gameActive) return;
+
+    // moves car based on current direction
+    car.x += car.sideSpeed * car.direction;
+   
+    // Boundary check (Game over if you hit the "grass")
+    if (car.x < 20 || car.x > canvas.width - 20) {
+        gameOver();
+    }
+
+    // Infinite road scrolling and updating score
+    roadOffset = (roadOffset + car.forwardSpeed) % 120;
+    score += car.forwardSpeed;
+    scoreEl.innerText = Math.floor(score / 10);
+
+    spawnObstacle();
+    obstacles.forEach((obs, index) => {
+        obs.y += car.forwardSpeed;
+
+        // Collision Detection
+        const dx = car.x - obs.x;
+        const dy = car.y - obs.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+       
+        if (distance < (car.width/2 + obs.size/2)) {
+            gameOver();
+        }
+
+        if (obs.y > canvas.height) obstacles.splice(index, 1);
+    });
+}
+
+function drawCone(ctx, x, y, scale = 1){
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // Base
+    ctx.fillStyle = "#444";
+    ctx.fillRect(-12, 10, 24, 6);
+
+    // Cone body
+    ctx.fillStyle = "#ff7a00";
+    ctx.beginPath();
+    ctx.moveTo(-10, 10);
+    ctx.lineTo(10, 10);
+    ctx.lineTo(5, -20);
+    ctx.lineTo(-5, -20);
+    ctx.closePath();
+    ctx.fill();
+
+    // White stripe
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.moveTo(-7, -2);
+    ctx.lineTo(7, -2);
+    ctx.lineTo(5, -8);
+    ctx.lineTo(-5, -8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function drawCar(ctx, x, y, width, height, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-Math.PI)
+   
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = color;
+    ctx.fillRect(-car.width/2, -car.height/2, car.width, car.height);
+   
+    // Windshield
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ecf0f1";
+    ctx.fillRect(-(width ?? car.width)/2 + 4, -(height ?? car.height)/2 + 8, (width ?? car.width) - 8, 12);
+    ctx.restore();
+}
+
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Road Edges
+    ctx.fillStyle = "#2ecc71"; // Green grass
+    ctx.fillRect(0, 0, 20, canvas.height);
+    ctx.fillRect(canvas.width - 20, 0, 20, canvas.height);
+
+    // Draw Center Dash
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.setLineDash([40, 80]);
+    ctx.lineDashOffset = -roadOffset;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+
+    // Drawing Obstacles
+    obstacles.forEach(obs => {
+        if (obs.type === 'parked car') {
+            drawCar(ctx, obs.x, obs.y, car.width,car.height, obs.color)
+        } else if (obs.type == "traffic cone") {
+            drawCone(ctx, obs.x, obs.y)
+        }
+    });
+
+    // car drawing
+    ctx.save();
+    ctx.translate(car.x, car.y);
+   
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "#3498db";
+    ctx.fillRect(-car.width/2, -car.height/2, car.width, car.height);
+   
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ecf0f1";
+    ctx.fillRect(-car.width/2 + 4, -car.height/2 + 8, car.width - 8, 12);
+    ctx.restore();
+
+    update();
+    requestAnimationFrame(draw);
+}
+
+function gameOver() {
+    gameActive = false;
+    finalScoreEl.innerText = Math.floor(score / 10);
+    overlay.style.display = "flex";
+}
+
+function resetGame() {
+    obstacles = [];
+    score = 0;
+    car.x = 225;
+    car.direction = 1;
+    gameActive = true;
+    overlay.style.display = "none";
+}
+
+draw();
+</script>
+</body>
+</html>
