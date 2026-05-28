@@ -77,13 +77,13 @@ function update() {
 
     // moves car based on current direction
     car.x += car.sideSpeed * car.direction;
-   
-    // Boundary check (Game over if you hit the "grass")
+
+    // boundary checks
     if (car.x < 20 || car.x > canvas.width - 20) {
         gameOver();
     }
 
-    // Infinite road scrolling and updating score
+    // Infinite road scrolling and updating score as player is alive
     roadOffset = (roadOffset + car.forwardSpeed) % 120;
     score += car.forwardSpeed;
     scoreEl.innerText = Math.floor(score / 10);
@@ -92,7 +92,7 @@ function update() {
     obstacles.forEach((obs, index) => {
         obs.y += car.forwardSpeed;
 
-        // Collision Detection
+        // Checks if the car collides with object at the instant the update function is called
         const dx = car.x - obs.x;
         const dy = car.y - obs.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
